@@ -1,0 +1,44 @@
+services:
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ratelimit
+      POSTGRES_PASSWORD: ratelimit
+      POSTGRES_DB: ratelimit
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ratelimit -d ratelimit"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      dockerfile: deployments/Dockerfile
+    environment:
+      HTTP_ADDR: ":8080"
+      REDIS_ADDR: "redis:6379"
+      POLICY_BACKEND: "postgres"
+      POSTGRES_DSN: "postgres://ratelimit:ratelimit@postgres:5432/ratelimit?sslmode=disable"
+      POLICY_REFRESH: "5s"
+      SEED_DEMO: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
